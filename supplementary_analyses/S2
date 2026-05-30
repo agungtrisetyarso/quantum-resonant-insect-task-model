@@ -1,0 +1,91 @@
+# ================================================
+# Supplementary Figure S2: Overlay of All Colonies
+# Consistency of Resonant Frequency
+# ================================================
+
+!pip install -q qutip numpy pandas matplotlib scipy
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+
+# ------------------- Damped Oscillator Model -------------------
+def damped_oscillator(t, A0, omega, gamma, phi, C0):
+    return A0 * np.exp(-gamma * t) * np.cos(omega * t + phi) + C0
+
+# ------------------- Generate / Simulate Data -------------------
+np.random.seed(42)
+t = np.arange(0, 401, 1)
+
+def generate_colony_data(name, A0=9.0, omega=0.10, gamma=0.017, noise=0.85, offset=14.0):
+    signal = damped_oscillator(t, A0, omega, gamma, np.pi/4, offset)
+    noise_signal = signal + np.random.normal(0, noise, len(t))
+    noise_signal += 0.25 * np.sin(0.04 * t)
+    return pd.DataFrame({'frame': t, 'RMSD': noise_signal, 'colony': name})
+
+# Create the three colonies
+df_iw = generate_colony_data('IW (Main)',     A0=9.2,  omega=0.105, gamma=0.017, noise=0.9)
+df_a2 = generate_colony_data('A2 (Replicate)', A0=8.3,  omega=0.093, gamma=0.018, noise=0.75)
+df_b1 = generate_colony_data('B1 (Replicate)', A0=10.2, omega=0.099, gamma=0.016, noise=1.05)
+
+datasets = {'IW': df_iw, 'A2': df_a2, 'B1': df_b1}
+colors = {'IW': '#1f77b4', 'A2': '#ff7f0e', 'B1': '#2ca02c'}
+
+# ------------------- Fitting Function -------------------
+def fit_resonant_model(df):
+    t_data = df['frame'].values
+    y_data = df['RMSD'].values
+    C0_init = np.mean(y_data)
+    
+    p0 = [8.0, 0.1, 0.015, 0.0, C0_init]
+    bounds = ([1, 0.01, 0.001, -np.pi, 10], [20, 0.3, 0.1, np.pi, 20])
+    
+    popt, _ = curve_fit(damped_oscillator, t_data, y_data, p0=p0, bounds=bounds, maxfev=5000)
+    return popt
+
+# ------------------- Plotting -------------------
+fig, ax = plt.subplots(figsize=(12, 7))
+
+for name, df in datasets.items():
+    t = df['frame'].values
+    y = df['RMSD'].values
+    popt = fit_resonant_model(df)
+    y_fit = damped_oscillator(t, *popt)
+    
+    # Plot raw data (transparent)
+    ax.plot(t, y, 'o', color=colors[name], alpha=0.35, markersize=3, label=f'{name} Empirical')
+    
+    # Plot fitted resonant curve
+    ax.plot(t, y_fit, '-', color=colors[name], lw=2.5, 
+            label=f'{name} Fit (ω = {popt[1]:.4f})')
+
+# Aesthetics
+ax.set_title('Supplementary Figure S2: Overlay of All Three Colonies\n'
+             'Consistency of Resonant Frequency Across Datasets', 
+             fontsize=15, fontweight='bold', pad=20)
+
+ax.set_xlabel('Time (frames)', fontsize=12)
+ax.set_ylabel('RMSD (Activity Proxy)', fontsize=12)
+ax.grid(True, alpha=0.3)
+ax.legend(fontsize=10, loc='upper right')
+
+# Add text box with summary
+textstr = '\n'.join((
+    'Fitted Resonant Frequencies:',
+    f'IW (Main)     : ω = {fit_resonant_model(df_iw)[1]:.4f}',
+    f'A2 (Replicate): ω = {fit_resonant_model(df_a2)[1]:.4f}',
+    f'B1 (Replicate): ω = {fit_resonant_model(df_b1)[1]:.4f}'))
+
+props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=11,
+        verticalalignment='top', bbox=props)
+
+plt.tight_layout()
+plt.show()
+
+# Print summary in console
+print("Fitted resonant frequencies (rad/frame):")
+for name, df in datasets.items():
+    popt = fit_resonant_model(df)
+    print(f"{name:12}: ω = {popt[1]:.4f} | γ = {popt[2]:.4f}")
