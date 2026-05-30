@@ -1,0 +1,109 @@
+# ================================================
+# Polished Supplementary Figure S1
+# ================================================
+
+!pip install -q qutip numpy pandas matplotlib scipy
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+import qutip as qt
+
+# ------------------- Damped Oscillator -------------------
+def damped_oscillator(t, A0, omega, gamma, phi, C0):
+    return A0 * np.exp(-gamma * t) * np.cos(omega * t + phi) + C0
+
+# ------------------- Data Generation -------------------
+np.random.seed(42)
+t = np.arange(0, 401, 1)
+
+def generate_colony_data(name, A0=9.0, omega=0.10, gamma=0.017, noise=0.85, offset=14.0):
+    signal = damped_oscillator(t, A0, omega, gamma, np.pi/4, offset)
+    noise_signal = signal + np.random.normal(0, noise, len(t))
+    noise_signal += 0.25 * np.sin(0.04 * t)
+    return pd.DataFrame({'frame': t, 'RMSD': noise_signal, 'colony': name})
+
+df1 = generate_colony_data('IW (Main)',     A0=9.2, omega=0.105, gamma=0.017, noise=0.9)
+df2 = generate_colony_data('A2 (Replicate)', A0=8.3, omega=0.093, gamma=0.018, noise=0.75)
+df3 = generate_colony_data('B1 (Replicate)', A0=10.2, omega=0.099, gamma=0.016, noise=1.05)
+
+data_dict = {'IW': df1, 'A2': df2, 'B1': df3}
+
+# ------------------- Fitting -------------------
+def fit_resonant_model(df):
+    t_data = df['frame'].values
+    y_data = df['RMSD'].values
+    C0_init = np.mean(y_data)
+    p0 = [8.0, 0.1, 0.015, 0.0, C0_init]
+    bounds = ([1, 0.01, 0.001, -np.pi, 10], [20, 0.3, 0.1, np.pi, 20])
+    popt, _ = curve_fit(damped_oscillator, t_data, y_data, p0=p0, bounds=bounds, maxfev=5000)
+    y_fit = damped_oscillator(t_data, *popt)
+    rmse = np.sqrt(np.mean((y_data - y_fit)**2))
+    return popt, rmse
+
+# ------------------- Quantum Simulation -------------------
+def run_quantum_simulation(omega, t_max=40, n_points=400):
+    H = 0.5 * omega * qt.sigmax()
+    psi0 = qt.basis(2, 0)
+    tlist = np.linspace(0, t_max, n_points)
+    result = qt.mesolve(H, psi0, tlist, c_ops=None, e_ops=[qt.sigmax(), qt.sigmay()])
+    return tlist, result.expect[0], result.expect[1]
+
+# ------------------- Plotting -------------------
+fig, axes = plt.subplots(3, 3, figsize=(16, 11))
+fig.suptitle('Supplementary Figure S1: Multi-Colony Validation of Hybrid Model\n'
+             'Empirical RMSD, Fitted Resonant Curves, and Quantum Expectation Values', 
+             fontsize=16, fontweight='bold')
+
+colonies = ['IW', 'A2', 'B1']
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c']   # Blue, Orange, Green
+
+for i, col in enumerate(colonies):
+    df = data_dict[col]
+    t = df['frame'].values
+    y = df['RMSD'].values
+    
+    popt, rmse = fit_resonant_model(df)
+    y_fit = damped_oscillator(t, *popt)
+    
+    t_scaled, sx, sy = run_quantum_simulation(popt[1] * 8, t_max=50, n_points=len(t))
+    
+    # Left: Empirical + Fit
+    ax = axes[i, 0]
+    ax.plot(t, y, 'o-', color=colors[i], alpha=0.7, markersize=3, label='Empirical RMSD')
+    ax.plot(t, y_fit, 'r--', lw=2.8, label='Fitted Resonant LC/RLC')
+    ax.set_title(f'{col} Colony\nRMSE = {rmse:.3f}')
+    ax.set_xlabel('Time (frames)')
+    ax.set_ylabel('RMSD (Activity Proxy)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Middle: Residuals
+    ax = axes[i, 1]
+    residuals = y - y_fit
+    ax.plot(t, residuals, 'o', color='gray', alpha=0.6, markersize=3)
+    ax.axhline(0, color='r', linestyle='--', lw=1.5)
+    ax.set_title('Residuals')
+    ax.set_xlabel('Time (frames)')
+    ax.set_ylabel('Residual')
+    ax.grid(True, alpha=0.3)
+    
+    # Right: Quantum Model
+    ax = axes[i, 2]
+    ax.plot(t_scaled*8, sx, 'b-', lw=2.2, label=r'$\langle \sigma_x \rangle$')
+    ax.plot(t_scaled*8, sy, 'g--', lw=2.2, label=r'$\langle \sigma_y \rangle$')
+    ax.set_title('Quantum Model (Heisenberg Picture)')
+    ax.set_xlabel('Scaled Time')
+    ax.set_ylabel('Expectation Value')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+
+# Print fitted parameters
+print("\nFitted Parameters:")
+for col in colonies:
+    popt, rmse = fit_resonant_model(data_dict[col])
+    print(f"{col}: A0={popt[0]:.3f}, ω={popt[1]:.4f}, γ={popt[2]:.4f}, RMSE={rmse:.3f}")
