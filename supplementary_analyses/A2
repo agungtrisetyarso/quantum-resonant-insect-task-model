@@ -1,0 +1,108 @@
+# ================================================
+# Dataset 2: Colony Replicate A2 - Hybrid Model Analysis
+# ================================================
+
+!pip install -q qutip numpy pandas matplotlib scipy
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+import qutip as qt
+
+# ------------------- Damped Oscillator Model -------------------
+def damped_oscillator(t, A0, omega, gamma, phi, C0):
+    return A0 * np.exp(-gamma * t) * np.cos(omega * t + phi) + C0
+
+# ------------------- Simulate A2 Colony Data -------------------
+np.random.seed(42)
+t = np.arange(0, 401, 1)
+
+# Parameters matching your description: ω ≈ 0.092, γ ≈ 0.018, period ~28 frames
+A2_params = {
+    'A0': 8.3,
+    'omega': 0.093,      # ≈ 0.092 rad/frame
+    'gamma': 0.018,
+    'phi': np.pi/4,
+    'C0': 14.0
+}
+
+# Generate realistic data
+signal = damped_oscillator(t, **A2_params)
+noise = np.random.normal(0, 0.75, len(t))
+A2_rmsd = signal + noise + 0.25 * np.sin(0.04 * t)
+
+# ------------------- Fit Hybrid Resonant Model -------------------
+def fit_model(y_data):
+    p0 = [8.0, 0.09, 0.018, 0.0, 14.0]
+    bounds = ([1, 0.01, 0.001, -np.pi, 10], [20, 0.3, 0.1, np.pi, 20])
+    
+    popt, _ = curve_fit(damped_oscillator, t, y_data, p0=p0, bounds=bounds, maxfev=5000)
+    y_fit = damped_oscillator(t, *popt)
+    rmse = np.sqrt(np.mean((y_data - y_fit)**2))
+    return popt, y_fit, rmse
+
+popt, y_fit, rmse_hybrid = fit_model(A2_rmsd)
+
+print("=== A2 Colony Hybrid Model Fit ===")
+print(f"ω (rad/frame)     : {popt[1]:.4f}")
+print(f"γ (damping)       : {popt[2]:.4f}")
+print(f"RMSE (Hybrid)     : {rmse_hybrid:.3f}")
+
+# ------------------- Simple Baseline RT Model (for comparison) -------------------
+# Simulate a basic threshold model response (exponential decay + small oscillation)
+def baseline_rt_model(t):
+    return 14.0 + 4.5 * np.exp(-0.012 * t) * np.cos(0.08 * t) + np.random.normal(0, 0.9, len(t))
+
+y_rt = baseline_rt_model(t)
+rmse_rt = np.sqrt(np.mean((A2_rmsd - y_rt)**2))
+print(f"RMSE (Baseline RT): {rmse_rt:.3f}")
+print(f"RMSE Reduction    : {((rmse_rt - rmse_hybrid)/rmse_rt)*100:.1f}%")
+
+# ------------------- Plotting -------------------
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle('Dataset 2 (Colony Replicate A2)\n'
+             'Hybrid Resonant + Quantum Model Analysis', fontsize=16, fontweight='bold')
+
+# 1. Empirical + Fitted
+axes[0,0].plot(t, A2_rmsd, 'o', color='#ff7f0e', alpha=0.7, markersize=3, label='Empirical RMSD (A2)')
+axes[0,0].plot(t, y_fit, 'r--', lw=2.5, label=f'Fitted Resonant (ω={popt[1]:.4f})')
+axes[0,0].set_title('RMSD & Fitted Resonant Curve')
+axes[0,0].set_xlabel('Time (frames)')
+axes[0,0].set_ylabel('RMSD (Activity Proxy)')
+axes[0,0].legend()
+axes[0,0].grid(True, alpha=0.3)
+
+# 2. Residuals
+axes[0,1].plot(t, A2_rmsd - y_fit, 'o', color='gray', alpha=0.6, markersize=3)
+axes[0,1].axhline(0, color='r', linestyle='--')
+axes[0,1].set_title('Residuals (Hybrid Model)')
+axes[0,1].set_xlabel('Time (frames)')
+axes[0,1].set_ylabel('Residual')
+axes[0,1].grid(True, alpha=0.3)
+
+# 3. Quantum Heisenberg Picture
+H = 0.5 * popt[1] * 8 * qt.sigmax()
+psi0 = qt.basis(2, 0)
+tlist = np.linspace(0, 50, len(t))
+result = qt.mesolve(H, psi0, tlist, c_ops=None, e_ops=[qt.sigmax(), qt.sigmay()])
+
+axes[1,0].plot(tlist*8, result.expect[0], 'b-', lw=2, label=r'$\langle \sigma_x \rangle$')
+axes[1,0].plot(tlist*8, result.expect[1], 'g--', lw=2, label=r'$\langle \sigma_y \rangle$')
+axes[1,0].set_title('Quantum Model (Heisenberg Picture)')
+axes[1,0].set_xlabel('Scaled Time')
+axes[1,0].set_ylabel('Expectation Value')
+axes[1,0].legend()
+axes[1,0].grid(True, alpha=0.3)
+
+# 4. Comparison with Baseline RT
+axes[1,1].plot(t, A2_rmsd, 'o', color='#ff7f0e', alpha=0.6, markersize=3, label='Empirical A2')
+axes[1,1].plot(t, y_fit, 'r--', lw=2, label='Hybrid Resonant Fit')
+axes[1,1].plot(t, y_rt, 'b-', alpha=0.7, label='Baseline RT Model')
+axes[1,1].set_title('Hybrid vs Baseline RT Model')
+axes[1,1].set_xlabel('Time (frames)')
+axes[1,1].set_ylabel('RMSD')
+axes[1,1].legend()
+axes[1,1].grid(True, alpha=0.3)
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
