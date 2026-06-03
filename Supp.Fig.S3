@@ -1,0 +1,61 @@
+# ================================================
+# Supplementary Figure S3: Sensitivity of von Neumann Entropy to Damping Parameter γ
+# ================================================
+
+!pip install qutip matplotlib numpy scipy -q
+
+import numpy as np
+import matplotlib.pyplot as plt
+from qutip import *
+import warnings
+warnings.filterwarnings('ignore')
+
+# Parameters from the manuscript
+omega = 0.098          # resonant frequency (rad/frame)
+gamma_values = [0.005, 0.010, 0.015, 0.020, 0.025, 0.030]  # damping rates to test
+t = np.linspace(0, 400, 800)  # time frames (matching empirical scale)
+colors = plt.cm.viridis(np.linspace(0, 1, len(gamma_values)))
+
+plt.figure(figsize=(10, 7))
+
+for i, gamma in enumerate(gamma_values):
+    # Hamiltonian
+    H = (omega / 2) * sigmax()
+    
+    # Collapse operators
+    C1 = np.sqrt(gamma) * sigmam()      # amplitude damping
+    C2 = np.sqrt(0.01) * sigmaz()       # dephasing (fixed)
+    
+    # Initial state: ground state |0><0|
+    rho0 = ket2dm(basis(2, 0))
+    
+    # Solve master equation
+    result = mesolve(H, rho0, t, c_ops=[C1, C2], e_ops=[])
+    
+    # Compute von Neumann entropy for each time point
+    entropy = []
+    for rho_t in result.states:
+        S = entropy_vn(rho_t, base=2)   # von Neumann entropy in bits
+        entropy.append(S)
+    entropy = np.array(entropy)
+    
+    # Plot
+    label = f'γ = {gamma:.3f}'
+    plt.plot(t, entropy, color=colors[i], linewidth=2.2, label=label, alpha=0.9)
+
+# Formatting
+plt.title('Supplementary Figure S3: Sensitivity of Von Neumann Entropy\nto Damping Parameter γ', 
+          fontsize=14, pad=20)
+plt.xlabel('Time (frames)', fontsize=12)
+plt.ylabel('Von Neumann Entropy S(ρ) [bits]', fontsize=12)
+plt.grid(True, alpha=0.3)
+plt.legend(title='Damping Rate γ', fontsize=11, title_fontsize=12, loc='lower right')
+plt.axhline(y=1.0, color='gray', linestyle='--', alpha=0.6, label='Maximum Entropy (1 bit)')
+
+plt.annotate('Stronger damping → faster entropy saturation\n(mirroring faster colony stabilization)',
+             xy=(150, 0.65), xytext=(180, 0.45),
+             arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
+             fontsize=11, color='darkred', bbox=dict(boxstyle="round,pad=0.3", facecolor="wheat", alpha=0.8))
+
+plt.tight_layout()
+plt.show()
