@@ -1,46 +1,29 @@
-# quantum-resonant-insect-task-model
-Quantum-inspired resonant LC-circuit + response-threshold model of task allocation in Ooceraea biroi colonies (extension of QICIF framework)
-# Quantum-Inspired Resonant Dynamics of Task Substitution in Eusocial Insect Colonies
+# Code for "Exact damping laws for threshold-based task allocation with finite behavioural response time"
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
-[![QuTiP](https://img.shields.io/badge/QuTiP-5+-green.svg)](https://qutip.org/)
+A. Trisetyarso and T. Taufikurahman, submitted to *Mathematical Biosciences*.
 
-**Extension of the Quantum-Inspired Computational Intelligence Framework (QICIF) to biological systems**
+All scripts are plain Python 3 (tested with Python 3.13, NumPy 2.5, SciPy 1.18, Matplotlib 3.11).
+Random seeds are fixed, so every number in the manuscript is reproduced exactly.
 
-This repository implements a **hybrid response-threshold + resonant LC-circuit + quantum-inspired model** of dynamic task allocation in eusocial insects, using high-resolution colony tracking data from *Ooceraea biroi*.
+```
+pip install -r requirements.txt
+python variance_law_check.py   # Thm 2 and Cor 1: variance law to ~1e-10, probit inequality
+python fig_variance_law.py     # Fig. 8 (variance law, scaling triad, stimulus-noise invariance)  ~25 s
+python reversal.py             # Table 3 (inhibition floor and heterogeneity reversal)            <5 s
+python cooling.py              # Cor. 4 (stimulus noise with passive decay), ABM vs closed form   ~20 s
+python finite_size.py          # Table 7 (ABM vs large-N vs O(1/N) system-size correction)        ~1 min
+```
 
-It directly bridges the original QICIF automation manuscript (oscillatory labor-capital substitution via LC circuits and entangled states) with real biological data from Ulrich et al. (2021).
+| Manuscript item | Script |
+|---|---|
+| Theorem 2, Corollary 1 (numerical check) | `variance_law_check.py` |
+| Fig. 8, Theorem 4 checks | `fig_variance_law.py` |
+| Table 3, Theorem 3 checks | `reversal.py` |
+| Corollary 4 checks (Section 3.4) | `cooling.py` |
+| Table 7, Eq. (emre), Section 4.2 | `finite_size.py` |
+| Figs. 1-7, Table 2 | `original_scripts/` (model.py, figs_v2.py, fig_sources.py, check_N.py) |
 
----
+Units: time in units of the response time tau, stimulus in units of the median threshold;
+the feedback gain is A = alpha*tau/theta_bar.
 
-### Abstract
-Division of labor in eusocial insects emerges from simple individual response thresholds yet produces robust oscillatory reallocation under perturbation. We extend classical response-threshold models by mapping them onto a resonant LC-circuit analogy (workers as capacitors, task stimuli as inductors) and a quantum-inspired formalism (entangled colony states evolved in the Heisenberg picture using QuTiP). The hybrid framework quantitatively reproduces empirical damped oscillations observed in *Ooceraea biroi* colonies and reveals striking parallels to automation systems.
-
----
-
-### Key Features
-- ✅ Loads and cleans real *Ooceraea biroi* tracking data (Ulrich et al., 2021)
-- ✅ Detects oscillatory peaks in colony activity
-- ✅ Fits damped resonant LC/RLC oscillator (Fig. 2)
-- ✅ Runs QuTiP quantum simulation (Heisenberg picture, entangled states) (Fig. 3)
-- ✅ One-click script that generates all publication-ready figures
-- ✅ Fully reproducible Python pipeline (conda environment)
-
----
-
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/quantum-resonant-insect-task-model.git
-cd quantum-resonant-insect-task-model
-
-# 2. Create and activate conda environment
-conda env create -f environment.yml   # (or manually as below)
-conda activate insect-model
-
-# Manual installation if you prefer:
-conda create -n insect-model python=3.11
-conda activate insect-model
-conda install -c conda-forge numpy pandas matplotlib scipy qutip
+Licence: MIT (see LICENSE). Cite via CITATION.cff.
